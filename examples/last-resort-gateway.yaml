@@ -1,0 +1,29 @@
+---
+#
+# Example configuration file for Last-Resort Gateway.
+#
+reporting:
+  logging:
+    console: true
+    syslog: false
+    level: debug
+    files:
+      - json:/var/log/last-resort-gateway/lrg.log
+  metrics:
+    - file:
+        interval: 10s
+        path: /var/log/last-resort-gateway/lrg.metrics
+    - collectd:
+        interval: 5s
+
+gateways:
+  - from: 
+      prefix: 0.0.0.0/0
+      protocol: bird
+    to:
+      protocol: lrg
+  - from:
+      prefix: "::/0"
+      protocol: bird
+    to:
+      protocol: lrg
