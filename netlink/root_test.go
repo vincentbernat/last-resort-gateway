@@ -18,14 +18,14 @@ import (
 
 func TestFastStartStop(t *testing.T) {
 	r := reporter.NewMock()
-	c, err := New(r)
+	c, err := New(r, DefaultConfiguration)
 	if err != nil {
 		t.Fatalf("New() error:\n%+v", err)
 	}
 
 	// Setup observer
 	done := make(chan struct{})
-	c.Subscribe("slow", func(u netlink.RouteUpdate) {
+	c.Subscribe("slow", func(_ Notification) {
 		<-done
 	})
 
@@ -47,19 +47,24 @@ func TestFastStartStop(t *testing.T) {
 
 func TestObserveRoutes(t *testing.T) {
 	r := reporter.NewMock()
-	c, err := New(r)
+	c, err := New(r, DefaultConfiguration)
 	if err != nil {
 		t.Fatalf("New() error:\n%+v", err)
 	}
 
 	// Setup observer
-	got := []netlink.RouteUpdate{}
+	var got []*netlink.RouteUpdate
 	done := make(chan struct{})
-	c.Subscribe("store", func(u netlink.RouteUpdate) {
-		if u.Table == syscall.RT_TABLE_UNSPEC {
+	c.Subscribe("store", func(notification Notification) {
+		if notification.StartOfRIB {
+			got = []*netlink.RouteUpdate{}
+			return
+		}
+		if notification.EndOfRIB {
 			close(done)
 			return
 		}
+		u := notification.RouteUpdate
 		if u.Table == syscall.RT_TABLE_LOCAL {
 			return
 		}
@@ -70,11 +75,11 @@ func TestObserveRoutes(t *testing.T) {
 	// Add some initial routes
 	setup := `
 [ -d /sys/class/net/dummy0 ] || ip link add name dummy0 type dummy || true
+ip route flush table main
+ip -6 route flush table main
 ip link set up dev dummy0
 sysctl -w net.ipv6.conf.dummy0.optimistic_dad=1
 sysctl -w net.ipv6.conf.dummy0.disable_ipv6=0
-ip route flush dev dummy0
-ip -6 route flush dev dummy0
 ip route add 192.168.24.0/24 dev dummy0
 ip route add 192.168.25.0/24 via 192.168.24.1
 ip route add 2001:db8:24::/64 dev dummy0
@@ -375,8 +380,12 @@ ip route add 192.168.26.0/24 dev dummy0 table 100
 
 	for _, tc := range cases {
 		ready := make(chan struct{})
-		got := []netlink.RouteUpdate{}
-		c.Subscribe("store", func(u netlink.RouteUpdate) {
+		got := []*netlink.RouteUpdate{}
+		c.Subscribe("store", func(notification Notification) {
+			u := notification.RouteUpdate
+			if u == nil {
+				t.Fatalf("Non-route update received: %v", notification)
+			}
 			got = append(got, u)
 			close(ready)
 		})
@@ -417,37 +426,71 @@ func TestManyManyRoutes(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skip many many routes test in short mode")
 	}
+	routes := 5000
 	r := reporter.NewMock()
-	c, err := New(r)
+	c, err := New(r, DefaultConfiguration)
 	if err != nil {
 		t.Fatalf("New() error:\n%+v", err)
 	}
 
-	count := 0
-	done := make(chan struct{})
-	c.Subscribe("discard", func(u netlink.RouteUpdate) {
-		if u.Table == syscall.RT_TABLE_UNSPEC {
-			close(done)
+	prefixes := map[string]bool{}
+	events := []string{}
+	eor := make(chan struct{})
+	c.Subscribe("log", func(notification Notification) {
+		if notification.StartOfRIB {
+			events = append(events, "start")
+			t.Logf("receive a start event with count = %d", len(prefixes))
+			prefixes = map[string]bool{}
 			return
 		}
+		if notification.EndOfRIB {
+			events = append(events, "end")
+			t.Logf("receive a end event with count = %d", len(prefixes))
+			if eor != nil {
+				close(eor)
+			}
+			return
+		}
+		u := notification.RouteUpdate
 		if u.Table != syscall.RT_TABLE_MAIN {
 			return
 		}
-		count++
+		if u.Dst.IP.To4() == nil {
+			return
+		}
+		var evt string
+		switch u.Type {
+		case syscall.RTM_NEWROUTE:
+			evt = "route+"
+			prefixes[u.Dst.String()] = true
+		case syscall.RTM_DELROUTE:
+			evt = "route-"
+			delete(prefixes, u.Dst.String())
+		}
+
+		if len(events) == 0 {
+			events = append(events, evt)
+			return
+		}
+		last := events[len(events)-1]
+		if last == evt {
+			return
+		}
+		events = append(events, evt)
 	})
 
-	setup := `
+	setup := fmt.Sprintf(`
 [ -d /sys/class/net/dummy0 ] || ip link add name dummy0 type dummy || true
 ip link set up dev dummy0
 sysctl -w net.ipv6.conf.dummy0.disable_ipv6=1
-ip route flush dev dummy0
+ip route flush table main
+ip -6 route flush table main
 ip route add 192.168.0.0/24 dev dummy0
-seq 1 10000 | while read n; do
-  j=$((n%65536/256))
-  k=$((n%256))
+seq 1 %d | while read n; do
+  j=$((n%%65536/256))
+  k=$((n%%256))
   ip route add 10.2.$j.$k/32 via 192.168.0.1
-done
-`
+done`, routes)
 	var outbuf, errbuf bytes.Buffer
 	cmd := exec.Command("sh", "-ec", setup)
 	cmd.Stdout = &outbuf
@@ -467,13 +510,19 @@ done
 		}
 	}()
 
-	<-done
-	if count != 10001 {
-		t.Fatalf("unexpected number of initial routes (%d, expected 10001)", count)
+	<-eor
+	if diff := helpers.Diff(events, []string{"start", "route+", "end"}); diff != "" {
+		t.Fatalf("unexpected log of events for initial routes (-got, +want):\n%s", diff)
+	}
+	got := len(prefixes)
+	if got != routes+1 {
+		t.Fatalf("unexpected number of initial routes (%d, expected %d)",
+			got, routes+1)
 	}
 
-	prevCount := 0
-	count = 0
+	prevCount := len(prefixes)
+	events = []string{}
+	eor = nil
 	outbuf.Reset()
 	errbuf.Reset()
 	cmd = exec.Command("sh", "-ec", "ip route flush dev dummy0")
@@ -484,12 +533,31 @@ done
 			setup, outbuf.String(), errbuf.String(), err)
 	}
 	for {
-		time.Sleep(200 * time.Millisecond)
+		time.Sleep(500 * time.Millisecond)
+		count := len(prefixes)
 		if prevCount == count {
 			break
 		}
+		prevCount = count
 	}
-	if count != 10001 {
-		t.Fatalf("unexpected number of removed routes (%d, expected 10001)", count)
+	// The netlink socket should be too small to get all route
+	// notifications at once. Therefore, it is expected we have to
+	// scan again the routes to get the result. We may even have
+	// to scan several times. If this doesn't work, we'll need a
+	// method to enforce socket receive buffer to something like
+	// 106496. This test is quite racy.
+	events = append(events, "", "", "", "")
+	if diff := helpers.Diff(events[:4], []string{
+		"route-", // Routes are being removed
+		"start",  // Overflow, we start from scratch
+		"route+", // Routes not removed yet
+		"end",
+		// We could have either "route-", "start" or even nothing.
+	}); diff != "" {
+		t.Fatalf("unexpected log of events for removed routes (-got, +want):\n%s", diff)
+	}
+	got = len(prefixes)
+	if got != 0 {
+		t.Fatalf("unexpected remaining routes (%d, expected 0)", got)
 	}
 }

@@ -8,6 +8,7 @@ import (
 	"lrg/config"
 	"lrg/gateways"
 	"lrg/helpers"
+	"lrg/netlink"
 	"lrg/reporter"
 	"lrg/reporter/logger"
 	"lrg/reporter/metrics"
@@ -42,6 +43,7 @@ gateways:
 						},
 					},
 				},
+				Netlink: netlink.DefaultConfiguration,
 			},
 		}, {
 			in: `
@@ -55,6 +57,8 @@ reporting:
         listen: :8123
   sentry:
     dsn: "http://public:secret@errors"
+netlink:
+  socketsize: 1000000
 gateways:
   - from:
       prefix: 0.0.0.0/0
@@ -75,6 +79,13 @@ gateways:
 					Sentry: sentry.Configuration{
 						DSN: "http://public:secret@errors",
 					},
+				},
+				Netlink: netlink.Configuration{
+					SocketSize:         1000000,
+					ChannelSize:        netlink.DefaultConfiguration.ChannelSize,
+					BackoffInterval:    netlink.DefaultConfiguration.BackoffInterval,
+					BackoffMaxInterval: netlink.DefaultConfiguration.BackoffMaxInterval,
+					CureInterval:       netlink.DefaultConfiguration.CureInterval,
 				},
 				Gateways: gateways.Configuration{
 					gateways.LRGConfiguration{

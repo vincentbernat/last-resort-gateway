@@ -1,0 +1,4 @@
+[[constraint]]
+    name = "github.com/vishvananda/netlink"
+    source = "https://github.com/vincentbernat/go-netlink.git"
+    branch = "exoscale/master"

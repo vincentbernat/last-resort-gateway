@@ -14,24 +14,24 @@ func TestMockComponent(t *testing.T) {
 	c, inject := NewMock()
 	count1 := 0
 	count2 := 0
-	var last1 netlink.RouteUpdate
-	var last2 netlink.RouteUpdate
-	c.Subscribe("first", func(u netlink.RouteUpdate) {
+	var last1 Notification
+	var last2 Notification
+	c.Subscribe("first", func(n Notification) {
 		count1++
-		last1 = u
+		last1 = n
 	})
-	c.Subscribe("second", func(u netlink.RouteUpdate) {
+	c.Subscribe("second", func(n Notification) {
 		count2++
-		last2 = u
+		last2 = n
 	})
 
-	expected := netlink.RouteUpdate{
+	expected := Notification{RouteUpdate: &netlink.RouteUpdate{
 		Type: syscall.RTM_NEWROUTE,
 		Route: netlink.Route{
 			LinkIndex: 2,
 			Dst:       config.MustParseCIDR("192.168.0.0/16"),
 		},
-	}
+	}}
 	inject(expected)
 	if count1 != 1 {
 		t.Fatalf("Unexpected value for count1 after first route inject (%d, expected 1)",
@@ -47,13 +47,13 @@ func TestMockComponent(t *testing.T) {
 	}
 
 	c.Unsubscribe("second")
-	expected = netlink.RouteUpdate{
+	expected = Notification{RouteUpdate: &netlink.RouteUpdate{
 		Type: syscall.RTM_NEWROUTE,
 		Route: netlink.Route{
 			LinkIndex: 2,
 			Dst:       config.MustParseCIDR("192.168.10.0/24"),
 		},
-	}
+	}}
 	inject(expected)
 	if count1 != 2 {
 		t.Fatalf("Unexpected value for count1 after second route inject (%d, expected 2)",

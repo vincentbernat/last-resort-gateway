@@ -2,19 +2,15 @@
 
 package netlink
 
-import (
-	"github.com/vishvananda/netlink"
-)
-
 type mockComponent struct {
 	observerSubComponent
 }
 
 // NewMock creates a new mock component for netlink component. This
 // component does nothing on its own. It also provides a function to
-// inject route updates and will just broadcast them to all
+// inject notifications and will just broadcast them to all
 // subscribers.
-func NewMock() (Component, func(netlink.RouteUpdate)) {
+func NewMock() (Component, func(Notification)) {
 	c := &mockComponent{
 		observerSubComponent: newObserver(),
 	}
@@ -31,8 +27,8 @@ func (c *mockComponent) Stop() error {
 	return nil
 }
 
-// inject will inject a route update into the component. It will just
+// inject will inject notifications into the component. It will just
 // be broadcasted to all subscribers.
-func (c *mockComponent) inject(u netlink.RouteUpdate) {
-	c.notify(u)
+func (c *mockComponent) inject(n Notification) {
+	c.notify(n)
 }

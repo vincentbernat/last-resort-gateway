@@ -22,6 +22,7 @@ import (
 type daemonConfiguration struct {
 	Reporting reporter.Configuration
 	Gateways  gateways.Configuration
+	Netlink   netlink.Configuration
 }
 
 // Parse a configuration from YAML.
@@ -33,6 +34,7 @@ func (configuration *daemonConfiguration) UnmarshalYAML(unmarshal func(interface
 	var raw rawDaemonConfiguration
 	err := yaml.Unmarshal([]byte(`
 reporting: {}
+netlink: {}
 `), &raw)
 	if err != nil {
 		return errors.Wrap(err, "unable to decode default daemon configuration")
@@ -104,7 +106,7 @@ A configuration file must be provided.`,
 		}
 
 		// netlink
-		netlinkComponent, err := netlink.New(r)
+		netlinkComponent, err := netlink.New(r, config.Netlink)
 		if err != nil {
 			return errors.Wrap(err, "unable to initialize netlink component")
 		}

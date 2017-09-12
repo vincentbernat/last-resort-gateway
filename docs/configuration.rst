@@ -7,6 +7,7 @@ is configured in a different section:
 
  - ``reporting``: `Reporting`_
  - ``gateways``: `Gateways`_
+ - ``netlink``: `Netlink`_
 
 Currently, due to a technical limitation, if a key is unknown, it will
 just be ignored. Be extra-careful that all keys are correctly spelled.
@@ -199,3 +200,32 @@ previous run is already here. All keys are optional.
    useful only on the first start of the daemon if we want to ensure
    trafic doesn't escape a routing table until routing daemons are
    able to install routes.
+
+Netlink
+-------
+
+Netlink is the protocol used to get and send routes to the kernel. It
+is not possible to reliably listen for changes using Netlink as
+changes may overflow the space available for a given
+socket. Therefore, *Last-Resort Gateway* is using some adaptative
+algorithm when it detects such an overflow. The following keys are
+availble to tune this algorithm:
+
+ - ``socketsize`` (not implemented yet). Size of the receive buffer in
+   bytes. The bigger it is, the more *Last-Resort Gateway* will be
+   able to extract information from the kernel without using
+   kludges. The default value is 0 and means to keep the default value
+   (which is the value of ``/proc/sys/net/core/rmem_default``.
+ - ``channelsize``. Size of the internal channel used to collect
+   routes in number of routes. The routine collecting routes from the
+   kernel will store those routes in a channel waiting for the rest of
+   the application to pick them. If the application is too slow, the
+   kernel may overflow the available space in the socket buffer. The
+   default value is 100.
+ - ``backoffinterval``. An exponential backoff is used to retry
+   getting routes from the kernel when an overflow happens. This
+   setting is the initial interval. The default value is 10ms.
+ - ``backoffmaxinterval``. This setting is the maximum interval for the retry
+   algorithm. The default value is 10s.
+ - ``cureinterval``. When no error happens in the given interval, the
+   backoff algorithm is reset. The default value is 30s.
