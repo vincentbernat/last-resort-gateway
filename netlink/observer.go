@@ -16,45 +16,34 @@ type Notification struct {
 	EndOfRIB    bool                 // End of initial RIB
 }
 
-// observerSubComponent manages a list of subscribers and allow to
-// subscribe/unsubscribe to them.
+// observerSubComponent send notifications to a registered subscriber.
 type observerSubComponent struct {
-	callbacks    map[string]func(Notification)
+	callback     func(Notification)
 	callbackLock sync.RWMutex
+	subscribed   chan struct{}
+	once         sync.Once
 }
 
 // newObserver returns a new observer subcomponent.
 func newObserver() observerSubComponent {
-	return observerSubComponent{
-		callbacks: make(map[string]func(Notification)),
-	}
+	return observerSubComponent{subscribed: make(chan struct{})}
 }
 
-// Subscribe adds or replace a callback to the callback chain. The
-// callback is identified by the provided string.
-func (c *observerSubComponent) Subscribe(id string, cb func(Notification)) {
+// Subscribe or replace a callback. When replacing, old notifications are not sent.
+func (c *observerSubComponent) Subscribe(cb func(Notification)) {
 	c.callbackLock.Lock()
 	defer c.callbackLock.Unlock()
-	c.callbacks[id] = cb
+	c.callback = cb
+	c.once.Do(func() {
+		close(c.subscribed)
+	})
 }
 
-// Unsubscribe remove a callback from the callback chain. It does
-// nothing if the callback doesn't exist.
-func (c *observerSubComponent) Unsubscribe(id string) {
-	c.callbackLock.Lock()
-	defer c.callbackLock.Unlock()
-	delete(c.callbacks, id)
-}
-
-// notify will notify all subscribers of a route update. It returns
-// the number of updates.
-func (c *observerSubComponent) notify(notification Notification) int {
-	count := 0
+// notify will notify the eventual subscriber of a route update.
+func (c *observerSubComponent) notify(notification Notification) {
 	c.callbackLock.RLock()
 	defer c.callbackLock.RUnlock()
-	for _, cb := range c.callbacks {
-		count++
-		cb(notification)
+	if c.callback != nil {
+		c.callback(notification)
 	}
-	return count
 }

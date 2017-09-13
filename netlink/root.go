@@ -1,9 +1,7 @@
 // Package netlink handles communication with the kernel (get routes
 // and write routes). It doesn't store any data but publishes it with
 // callbacks. It is a very thin layer and not meant a complete
-// abstraction of the underlying netlink library. Subscription should
-// be done before starting the component (otherwise, initial routes
-// won't be sent).
+// abstraction of the underlying netlink library.
 package netlink
 
 import (
@@ -24,8 +22,7 @@ import (
 type Component interface {
 	Start() error
 	Stop() error
-	Subscribe(string, func(Notification))
-	Unsubscribe(string)
+	Subscribe(func(Notification))
 }
 
 // fsmState represents the current state of the FSM for the netlink component.
@@ -166,7 +163,6 @@ func (c *realComponent) transition() error {
 
 func (c *realComponent) run() error {
 	c.state = idle
-	c.transition()
 
 	// Sleep a bit between each difficult transition
 	transitionBackoff := backoff.NewExponentialBackOff()
@@ -184,6 +180,7 @@ func (c *realComponent) run() error {
 
 	for {
 		select {
+		// Manage delayed transitions
 		case <-transitionTick:
 			if err := c.transition(); err != nil {
 				c.r.Error(err, "cannot change state")
@@ -193,6 +190,14 @@ func (c *realComponent) run() error {
 		case <-cureTick:
 			c.r.Debug("no error since a long time, reset transition ticker")
 			cureTick = nil
+
+		// Start the FSM once there is a subscriber
+		case <-c.subscribed:
+			if err := c.transition(); err != nil {
+				c.r.Error(err, "cannot change state")
+			} else {
+				c.subscribed = nil
+			}
 
 		case routeUpdate := <-c.updates:
 			if routeUpdate.Table == syscall.RT_TABLE_UNSPEC {
@@ -247,9 +252,9 @@ func (c *realComponent) run() error {
 				continue
 			}
 
-			count := c.notify(Notification{RouteUpdate: &routeUpdate})
+			c.notify(Notification{RouteUpdate: &routeUpdate})
 			c.r.Counter("route.updates").Inc(1)
-			c.r.Counter("callback.calls").Inc(int64(count))
+			c.r.Counter("callback.calls").Inc(1)
 
 		case <-c.t.Dying():
 			return nil

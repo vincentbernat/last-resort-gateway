@@ -25,7 +25,7 @@ func TestFastStartStop(t *testing.T) {
 
 	// Setup observer
 	done := make(chan struct{})
-	c.Subscribe("slow", func(_ Notification) {
+	c.Subscribe(func(_ Notification) {
 		<-done
 	})
 
@@ -55,7 +55,7 @@ func TestObserveRoutes(t *testing.T) {
 	// Setup observer
 	var got []*netlink.RouteUpdate
 	done := make(chan struct{})
-	c.Subscribe("store", func(notification Notification) {
+	c.Subscribe(func(notification Notification) {
 		if notification.StartOfRIB {
 			got = []*netlink.RouteUpdate{}
 			return
@@ -70,7 +70,6 @@ func TestObserveRoutes(t *testing.T) {
 		}
 		got = append(got, u)
 	})
-	defer c.Unsubscribe("store")
 
 	// Add some initial routes
 	setup := `
@@ -381,7 +380,7 @@ ip route add 192.168.26.0/24 dev dummy0 table 100
 	for _, tc := range cases {
 		ready := make(chan struct{})
 		got := []*netlink.RouteUpdate{}
-		c.Subscribe("store", func(notification Notification) {
+		c.Subscribe(func(notification Notification) {
 			u := notification.RouteUpdate
 			if u == nil {
 				t.Fatalf("Non-route update received: %v", notification)
@@ -436,7 +435,7 @@ func TestManyManyRoutes(t *testing.T) {
 	prefixes := map[string]bool{}
 	events := []string{}
 	eor := make(chan struct{})
-	c.Subscribe("log", func(notification Notification) {
+	c.Subscribe(func(notification Notification) {
 		if notification.StartOfRIB {
 			events = append(events, "start")
 			t.Logf("receive a start event with count = %d", len(prefixes))
