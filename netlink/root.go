@@ -23,6 +23,7 @@ type Component interface {
 	Start() error
 	Stop() error
 	Subscribe(func(Notification))
+	AddRoute(netlink.Route) error
 }
 
 // fsmState represents the current state of the FSM for the netlink component.
@@ -180,6 +181,9 @@ func (c *realComponent) run() error {
 
 	for {
 		select {
+		case <-c.t.Dying():
+			return nil
+
 		// Manage delayed transitions
 		case <-transitionTick:
 			if err := c.transition(); err != nil {
@@ -255,9 +259,6 @@ func (c *realComponent) run() error {
 			c.notify(Notification{RouteUpdate: &routeUpdate})
 			c.r.Counter("route.updates").Inc(1)
 			c.r.Counter("callback.calls").Inc(1)
-
-		case <-c.t.Dying():
-			return nil
 		}
 	}
 }

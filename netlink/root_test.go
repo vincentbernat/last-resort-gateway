@@ -16,6 +16,32 @@ import (
 	"lrg/reporter"
 )
 
+// resetNamespace will reset the current network namespace to its
+// initial state. It is assumed only dumm
+func resetNamespace(t *testing.T) {
+	var outbuf, errbuf bytes.Buffer
+	setup := `
+for n in $(ls /sys/class/net); do
+  [ -d /sys/class/net/$n ] || continue
+  [ $n != lo ] || continue
+  [ $n != dummy0 ] || continue
+  ip link del $n
+done
+ip route flush table 0
+ip link add name dummy0 type dummy || true
+sysctl -w net.ipv6.conf.dummy0.optimistic_dad=1
+ip link set down dev dummy0
+ip link set up dev dummy0
+`
+	cmd := exec.Command("sh", "-exc", setup)
+	cmd.Stdout = &outbuf
+	cmd.Stderr = &errbuf
+	if err := cmd.Run(); err != nil {
+		t.Fatalf("Unable to clean network namespace\n** Setup:\n%s\n** Stdout:\n%s\n** Stderr:\n%s\n** Error:\n%+v",
+			setup, outbuf.String(), errbuf.String(), err)
+	}
+}
+
 func TestFastStartStop(t *testing.T) {
 	r := reporter.NewMock()
 	c, err := New(r, DefaultConfiguration)
@@ -46,6 +72,8 @@ func TestFastStartStop(t *testing.T) {
 }
 
 func TestObserveRoutes(t *testing.T) {
+	resetNamespace(t)
+
 	r := reporter.NewMock()
 	c, err := New(r, DefaultConfiguration)
 	if err != nil {
@@ -73,12 +101,6 @@ func TestObserveRoutes(t *testing.T) {
 
 	// Add some initial routes
 	setup := `
-[ -d /sys/class/net/dummy0 ] || ip link add name dummy0 type dummy || true
-ip route flush table main
-ip -6 route flush table main
-ip link set up dev dummy0
-sysctl -w net.ipv6.conf.dummy0.optimistic_dad=1
-sysctl -w net.ipv6.conf.dummy0.disable_ipv6=0
 ip route add 192.168.24.0/24 dev dummy0
 ip route add 192.168.25.0/24 via 192.168.24.1
 ip route add 2001:db8:24::/64 dev dummy0
@@ -178,14 +200,14 @@ ip route add 192.168.26.0/24 dev dummy0 table 100
 				},
 			},
 		}, {
-			setup: "add 192.168.28.0/24 dev dummy0 table 90",
+			setup: "add 192.168.28.0/24 dev dummy0 table 100",
 			expected: []netlink.RouteUpdate{
 				{
 					Type: syscall.RTM_NEWROUTE,
 					Route: netlink.Route{
 						LinkIndex: 2,
 						Dst:       config.MustParseCIDR("192.168.28.0/24"),
-						Table:     90,
+						Table:     100,
 					},
 				},
 			},
@@ -202,14 +224,14 @@ ip route add 192.168.26.0/24 dev dummy0 table 100
 				},
 			},
 		}, {
-			setup: "del 192.168.28.0/24 dev dummy0 table 90",
+			setup: "del 192.168.28.0/24 dev dummy0 table 100",
 			expected: []netlink.RouteUpdate{
 				{
 					Type: syscall.RTM_DELROUTE,
 					Route: netlink.Route{
 						LinkIndex: 2,
 						Dst:       config.MustParseCIDR("192.168.28.0/24"),
-						Table:     90,
+						Table:     100,
 					},
 				},
 			},
@@ -226,14 +248,14 @@ ip route add 192.168.26.0/24 dev dummy0 table 100
 				},
 			},
 		}, {
-			setup: "add 2001:db8:28::/64 dev dummy0 table 90",
+			setup: "add 2001:db8:28::/64 dev dummy0 table 100",
 			expected: []netlink.RouteUpdate{
 				{
 					Type: syscall.RTM_NEWROUTE,
 					Route: netlink.Route{
 						LinkIndex: 2,
 						Dst:       config.MustParseCIDR("2001:db8:28::/64"),
-						Table:     90,
+						Table:     100,
 					},
 				},
 			},
@@ -250,14 +272,14 @@ ip route add 192.168.26.0/24 dev dummy0 table 100
 				},
 			},
 		}, {
-			setup: "del 2001:db8:28::/64 dev dummy0 table 90",
+			setup: "del 2001:db8:28::/64 dev dummy0 table 100",
 			expected: []netlink.RouteUpdate{
 				{
 					Type: syscall.RTM_DELROUTE,
 					Route: netlink.Route{
 						LinkIndex: 2,
 						Dst:       config.MustParseCIDR("2001:db8:28::/64"),
-						Table:     90,
+						Table:     100,
 					},
 				},
 			},
@@ -425,6 +447,8 @@ func TestManyManyRoutes(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skip many many routes test in short mode")
 	}
+
+	resetNamespace(t)
 	routes := 5000
 	r := reporter.NewMock()
 	c, err := New(r, DefaultConfiguration)
@@ -479,11 +503,6 @@ func TestManyManyRoutes(t *testing.T) {
 	})
 
 	setup := fmt.Sprintf(`
-[ -d /sys/class/net/dummy0 ] || ip link add name dummy0 type dummy || true
-ip link set up dev dummy0
-sysctl -w net.ipv6.conf.dummy0.disable_ipv6=1
-ip route flush table main
-ip -6 route flush table main
 ip route add 192.168.0.0/24 dev dummy0
 seq 1 %d | while read n; do
   j=$((n%%65536/256))
@@ -514,8 +533,8 @@ done`, routes)
 		t.Fatalf("unexpected log of events for initial routes (-got, +want):\n%s", diff)
 	}
 	got := len(prefixes)
-	if got != routes+1 {
-		t.Fatalf("unexpected number of initial routes (%d, expected %d)",
+	if got != routes+1 && got != routes+2 {
+		t.Fatalf("unexpected number of initial routes (%d, expected ~%d)",
 			got, routes+1)
 	}
 
@@ -556,7 +575,7 @@ done`, routes)
 		t.Fatalf("unexpected log of events for removed routes (-got, +want):\n%s", diff)
 	}
 	got = len(prefixes)
-	if got != 0 {
-		t.Fatalf("unexpected remaining routes (%d, expected 0)", got)
+	if got != 0 && got != 1 {
+		t.Fatalf("unexpected remaining routes (%d, expected ~0)", got)
 	}
 }

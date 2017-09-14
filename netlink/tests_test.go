@@ -11,7 +11,11 @@ import (
 )
 
 func TestMockComponent(t *testing.T) {
-	c, inject := NewMock()
+	routes := []netlink.Route{}
+	c, inject := NewMock(func(route netlink.Route) error {
+		routes = append(routes, route)
+		return nil
+	})
 	count := 0
 	var last Notification
 	c.Subscribe(func(n Notification) {
@@ -52,4 +56,19 @@ func TestMockComponent(t *testing.T) {
 		t.Fatalf("Unexpected route update after second route inject (-got, +want):\n%s",
 			diff)
 	}
+
+	if err := c.AddRoute(netlink.Route{
+		LinkIndex: 2,
+		Dst:       config.MustParseCIDR("192.168.0.0/16"),
+	}); err != nil {
+		t.Fatalf("AddRoute() error:\n%+v", err)
+	}
+	if diff := helpers.Diff(routes, []netlink.Route{
+		netlink.Route{
+			LinkIndex: 2,
+			Dst:       config.MustParseCIDR("192.168.0.0/16"),
+		}}); diff != "" {
+		t.Fatalf("AddRoute() (-got, +want):\n%s", diff)
+	}
+
 }
