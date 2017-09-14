@@ -39,7 +39,15 @@ gateways:
 				Gateways: gateways.Configuration{
 					gateways.LRGConfiguration{
 						From: gateways.LRGFromConfiguration{
-							Prefix: &defaultIPv6,
+							Prefix: defaultIPv6,
+							Table:  gateways.DefaultTable,
+						},
+						To: gateways.LRGToConfiguration{
+							Prefix:    defaultIPv6,
+							Table:     gateways.DefaultTable,
+							Protocol:  gateways.DefaultToProtocol,
+							Metric:    gateways.DefaultToMetric,
+							Blackhole: false,
 						},
 					},
 				},
@@ -89,12 +97,30 @@ gateways:
 				},
 				Gateways: gateways.Configuration{
 					gateways.LRGConfiguration{
-						From: gateways.LRGFromConfiguration{Prefix: &defaultIPv4},
-						To:   gateways.LRGToConfiguration{},
+						From: gateways.LRGFromConfiguration{
+							Prefix: defaultIPv4,
+							Table:  gateways.DefaultTable,
+						},
+						To: gateways.LRGToConfiguration{
+							Prefix:    defaultIPv4,
+							Table:     gateways.DefaultTable,
+							Protocol:  gateways.DefaultToProtocol,
+							Metric:    gateways.DefaultToMetric,
+							Blackhole: false,
+						},
 					},
 					gateways.LRGConfiguration{
-						From: gateways.LRGFromConfiguration{Prefix: &defaultIPv6},
-						To:   gateways.LRGToConfiguration{},
+						From: gateways.LRGFromConfiguration{
+							Prefix: defaultIPv6,
+							Table:  gateways.DefaultTable,
+						},
+						To: gateways.LRGToConfiguration{
+							Prefix:    defaultIPv6,
+							Table:     gateways.DefaultTable,
+							Protocol:  gateways.DefaultToProtocol,
+							Metric:    gateways.DefaultToMetric,
+							Blackhole: false,
+						},
 					},
 				},
 			},

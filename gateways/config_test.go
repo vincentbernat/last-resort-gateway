@@ -35,8 +35,17 @@ func TestUnmarshalGateways(t *testing.T) {
     prefix: 0.0.0.0/0`,
 			want: Configuration{
 				LRGConfiguration{
-					From: LRGFromConfiguration{Prefix: &defaultIPv4},
-					To:   LRGToConfiguration{},
+					From: LRGFromConfiguration{
+						Prefix: defaultIPv4,
+						Table:  DefaultTable,
+					},
+					To: LRGToConfiguration{
+						Prefix:    defaultIPv4,
+						Protocol:  DefaultToProtocol,
+						Metric:    DefaultToMetric,
+						Table:     DefaultTable,
+						Blackhole: false,
+					},
 				},
 			},
 		}, {
@@ -45,8 +54,17 @@ func TestUnmarshalGateways(t *testing.T) {
     prefix: ::/0`,
 			want: Configuration{
 				LRGConfiguration{
-					From: LRGFromConfiguration{Prefix: &defaultIPv6},
-					To:   LRGToConfiguration{},
+					From: LRGFromConfiguration{
+						Prefix: defaultIPv6,
+						Table:  DefaultTable,
+					},
+					To: LRGToConfiguration{
+						Prefix:    defaultIPv6,
+						Protocol:  DefaultToProtocol,
+						Metric:    DefaultToMetric,
+						Table:     DefaultTable,
+						Blackhole: false,
+					},
 				},
 			},
 		}, {
@@ -57,12 +75,30 @@ func TestUnmarshalGateways(t *testing.T) {
     prefix: ::/0`,
 			want: Configuration{
 				LRGConfiguration{
-					From: LRGFromConfiguration{Prefix: &defaultIPv4},
-					To:   LRGToConfiguration{},
+					From: LRGFromConfiguration{
+						Prefix: defaultIPv4,
+						Table:  DefaultTable,
+					},
+					To: LRGToConfiguration{
+						Prefix:    defaultIPv4,
+						Protocol:  DefaultToProtocol,
+						Metric:    DefaultToMetric,
+						Table:     DefaultTable,
+						Blackhole: false,
+					},
 				},
 				LRGConfiguration{
-					From: LRGFromConfiguration{Prefix: &defaultIPv6},
-					To:   LRGToConfiguration{},
+					From: LRGFromConfiguration{
+						Prefix: defaultIPv6,
+						Table:  DefaultTable,
+					},
+					To: LRGToConfiguration{
+						Prefix:    defaultIPv6,
+						Protocol:  DefaultToProtocol,
+						Metric:    DefaultToMetric,
+						Table:     DefaultTable,
+						Blackhole: false,
+					},
 				},
 			},
 		}, {
@@ -73,8 +109,17 @@ func TestUnmarshalGateways(t *testing.T) {
     prefix: 10.16.0.0/16`,
 			want: Configuration{
 				LRGConfiguration{
-					From: LRGFromConfiguration{Prefix: &defaultIPv4},
-					To:   LRGToConfiguration{Prefix: &randomPrefix},
+					From: LRGFromConfiguration{
+						Prefix: defaultIPv4,
+						Table:  DefaultTable,
+					},
+					To: LRGToConfiguration{
+						Prefix:    randomPrefix,
+						Protocol:  DefaultToProtocol,
+						Metric:    DefaultToMetric,
+						Table:     DefaultTable,
+						Blackhole: false,
+					},
 				},
 			},
 		}, {
@@ -100,15 +145,16 @@ func TestUnmarshalGateways(t *testing.T) {
 			want: Configuration{
 				LRGConfiguration{
 					From: LRGFromConfiguration{
-						Prefix:   &defaultIPv4,
+						Prefix:   defaultIPv4,
 						Protocol: &config.Protocol{ID: 2, Name: "kernel"},
 						Metric:   &metric0,
-						Table:    &config.Table{ID: 254},
+						Table:    config.Table{ID: 254},
 					},
 					To: LRGToConfiguration{
-						Protocol:  &config.Protocol{ID: 254},
-						Metric:    &metric1000,
-						Table:     &config.Table{ID: 90, Name: "public"},
+						Prefix:    defaultIPv4,
+						Protocol:  config.Protocol{ID: 254},
+						Metric:    metric1000,
+						Table:     config.Table{ID: 90, Name: "public"},
 						Blackhole: true,
 					},
 				},
