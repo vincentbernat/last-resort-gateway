@@ -8,10 +8,11 @@
   version = "v0.3.0"
 
 [[projects]]
+  branch = "exoscale/master"
   name = "github.com/cenkalti/backoff"
   packages = ["."]
-  revision = "61153c768f31ee5f130071d08fc82b85208528de"
-  version = "v1.1.0"
+  revision = "89d05a294e5e0ed3c24f125ba208fdacd7889571"
+  source = "https://github.com/vincentbernat/go-backoff.git"
 
 [[projects]]
   name = "github.com/certifi/gocertifi"
@@ -65,7 +66,7 @@
   branch = "exoscale/master"
   name = "github.com/vishvananda/netlink"
   packages = [".","nl"]
-  revision = "8c814347a110947c0dea7ba6e13a01d0e8c5af72"
+  revision = "acc7c705b4be9423064a1aeaef7a4770d716c41c"
   source = "https://github.com/vincentbernat/go-netlink.git"
 
 [[projects]]
@@ -119,6 +120,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "1cbc4d44bac2f819945559cb5afd13d8da94730c62c6938ef01492320147ccac"
+  inputs-digest = "9676885f5338428e3dbbe4fcde2b7c7b7ec808e5671334b78914e628108f64d0"
   solver-name = "gps-cdcl"
   solver-version = 1

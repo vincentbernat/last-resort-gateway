@@ -166,22 +166,17 @@ func (c *realComponent) run() error {
 	c.state = idle
 
 	// Sleep a bit between each difficult transition
-	transitionBackoff := backoff.NewExponentialBackOff()
-	transitionBackoff.InitialInterval = time.Duration(c.config.BackoffInterval)
-	transitionBackoff.Multiplier = 2
-	transitionBackoff.MaxInterval = time.Duration(c.config.BackoffMaxInterval)
-	transitionBackoff.MaxElapsedTime = 0
-	transitionTicker := backoff.NewTicker(transitionBackoff)
-	defer transitionTicker.Stop()
+	var transitionBackoff *backoff.ExponentialBackOff
+	var transitionTicker *backoff.Ticker
 	var transitionTick <-chan time.Time
-
-	// Once we didn't get an error since quite some time, we need
-	// to reset the above ticker
 	var cureTick <-chan time.Time
 
 	for {
 		select {
 		case <-c.t.Dying():
+			if transitionTick != nil {
+				transitionTicker.Stop()
+			}
 			return nil
 
 		// Manage delayed transitions
@@ -191,6 +186,7 @@ func (c *realComponent) run() error {
 				continue
 			}
 			transitionTick = nil
+			transitionTicker.Stop()
 		case <-cureTick:
 			c.r.Debug("no error since a long time, reset transition ticker")
 			cureTick = nil
@@ -246,13 +242,21 @@ func (c *realComponent) run() error {
 				}
 
 				// We still need to trigger a transition, but we'll sleep a bit.
+				if transitionTick == nil {
+					b := backoff.NewExponentialBackOff()
+					b.InitialInterval = time.Duration(c.config.BackoffInterval)
+					b.Multiplier = 2
+					b.MaxInterval = time.Duration(c.config.BackoffMaxInterval)
+					b.MaxElapsedTime = 0
+					transitionBackoff = b
+					transitionTicker = backoff.NewTicker(b)
+					transitionTick = transitionTicker.C
+				}
 				if cureTick == nil {
-					transitionBackoff.Reset()
 					cureTick = time.After(time.Duration(c.config.CureInterval))
 				}
 				c.r.Debug("sleep before next transition",
 					"elapsed", transitionBackoff.GetElapsedTime())
-				transitionTick = transitionTicker.C
 				continue
 			}
 

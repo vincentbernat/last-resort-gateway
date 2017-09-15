@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os/exec"
+	"sync"
 	"syscall"
 	"testing"
 	"time"
@@ -32,6 +33,8 @@ ip link add name dummy0 type dummy || true
 sysctl -w net.ipv6.conf.dummy0.optimistic_dad=1
 ip link set down dev dummy0
 ip link set up dev dummy0
+ip link set down dev lo
+ip link set up dev lo
 `
 	cmd := exec.Command("sh", "-exc", setup)
 	cmd.Stdout = &outbuf
@@ -458,8 +461,11 @@ func TestManyManyRoutes(t *testing.T) {
 
 	prefixes := map[string]bool{}
 	events := []string{}
+	var eventLock sync.Mutex // protect events and prefixes
 	eor := make(chan struct{})
 	c.Subscribe(func(notification Notification) {
+		eventLock.Lock()
+		defer eventLock.Unlock()
 		if notification.StartOfRIB {
 			events = append(events, "start")
 			t.Logf("receive a start event with count = %d", len(prefixes))
@@ -529,18 +535,22 @@ done`, routes)
 	}()
 
 	<-eor
+	eventLock.Lock()
 	if diff := helpers.Diff(events, []string{"start", "route+", "end"}); diff != "" {
 		t.Fatalf("unexpected log of events for initial routes (-got, +want):\n%s", diff)
 	}
 	got := len(prefixes)
+	eventLock.Unlock()
 	if got != routes+1 && got != routes+2 {
 		t.Fatalf("unexpected number of initial routes (%d, expected ~%d)",
 			got, routes+1)
 	}
 
+	eventLock.Lock()
 	prevCount := len(prefixes)
 	events = []string{}
 	eor = nil
+	eventLock.Unlock()
 	outbuf.Reset()
 	errbuf.Reset()
 	cmd = exec.Command("sh", "-ec", "ip route flush dev dummy0")
@@ -552,11 +562,14 @@ done`, routes)
 	}
 	for {
 		time.Sleep(500 * time.Millisecond)
+		eventLock.Lock()
 		count := len(prefixes)
 		if prevCount == count {
+			eventLock.Unlock()
 			break
 		}
 		prevCount = count
+		eventLock.Unlock()
 	}
 	// The netlink socket should be too small to get all route
 	// notifications at once. Therefore, it is expected we have to
@@ -564,6 +577,7 @@ done`, routes)
 	// to scan several times. If this doesn't work, we'll need a
 	// method to enforce socket receive buffer to something like
 	// 106496. This test is quite racy.
+	eventLock.Lock()
 	events = append(events, "", "", "", "")
 	if diff := helpers.Diff(events[:4], []string{
 		"route-", // Routes are being removed
@@ -575,6 +589,7 @@ done`, routes)
 		t.Fatalf("unexpected log of events for removed routes (-got, +want):\n%s", diff)
 	}
 	got = len(prefixes)
+	eventLock.Unlock()
 	if got != 0 && got != 1 {
 		t.Fatalf("unexpected remaining routes (%d, expected ~0)", got)
 	}

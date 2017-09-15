@@ -2,3 +2,7 @@
     name = "github.com/vishvananda/netlink"
     source = "https://github.com/vincentbernat/go-netlink.git"
     branch = "exoscale/master"
+[[constraint]]
+    name = "github.com/cenkalti/backoff"
+    source = "https://github.com/vincentbernat/go-backoff.git"
+    branch = "exoscale/master"
