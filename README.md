@@ -2,6 +2,10 @@
 
 Maintain last resort routes in the absence of any routing daemon.
 
+**Warning**: This project is not maintained. It happens to not suit my
+use case. The code is almost complete but some bits may still be
+missing. I never ran it for real. Don't use it.
+
 When a route for a given table is updated, a copy of it is made with a
 higher metric to serve as a last resort route in case the original
 route disappeared. This route is kept up-to-date except if the
