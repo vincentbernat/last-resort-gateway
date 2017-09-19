@@ -1,8 +1,11 @@
 package gateways
 
 import (
+	"net"
+	"strconv"
 	"testing"
 
+	"github.com/vishvananda/netlink"
 	"gopkg.in/yaml.v2"
 
 	"lrg/config"
@@ -173,6 +176,363 @@ func TestUnmarshalGateways(t *testing.T) {
 			if diff := helpers.Diff(got, tc.want); diff != "" {
 				t.Errorf("Unmarshal(%q) (-got, +want):\n%s", tc.input, diff)
 			}
+		}
+	}
+}
+
+func TestFromMatch(t *testing.T) {
+	defaultIPv4 := net.IPNet(config.MustParsePrefix("0.0.0.0/0"))
+	defaultIPv6 := net.IPNet(config.MustParsePrefix("::/0"))
+	randomPrefix := net.IPNet(config.MustParsePrefix("10.16.0.0/16"))
+	metric1000 := config.Metric(1000)
+	cases := []struct {
+		config   LRGFromConfiguration
+		route    netlink.Route
+		expected bool
+	}{
+		{
+			config: LRGFromConfiguration{
+				Prefix: config.Prefix(defaultIPv4),
+				Table:  config.Table{ID: 254},
+			},
+			route: netlink.Route{
+				Dst:   &defaultIPv4,
+				Table: 254,
+			},
+			expected: true,
+		}, {
+			config: LRGFromConfiguration{
+				Prefix: config.Prefix(defaultIPv4),
+				Table:  config.Table{ID: 254},
+			},
+			route: netlink.Route{
+				Dst:   &randomPrefix,
+				Table: 254,
+			},
+			expected: false,
+		}, {
+			config: LRGFromConfiguration{
+				Prefix: config.Prefix(defaultIPv6),
+				Table:  config.Table{ID: 254},
+			},
+			route: netlink.Route{
+				Dst:   &defaultIPv6,
+				Table: 254,
+			},
+			expected: true,
+		}, {
+			config: LRGFromConfiguration{
+				Prefix: config.Prefix(defaultIPv4),
+				Table:  config.Table{ID: 254},
+			},
+			route: netlink.Route{
+				Dst:   &defaultIPv6,
+				Table: 254,
+			},
+			expected: false,
+		}, {
+			config: LRGFromConfiguration{
+				Prefix: config.Prefix(defaultIPv6),
+				Table:  config.Table{ID: 254},
+			},
+			route: netlink.Route{
+				Dst:   &defaultIPv4,
+				Table: 254,
+			},
+			expected: false,
+		}, {
+			config: LRGFromConfiguration{
+				Prefix: config.Prefix(defaultIPv4),
+				Table:  config.Table{ID: 254},
+			},
+			route: netlink.Route{
+				Dst:      &defaultIPv4,
+				Table:    254,
+				Priority: 100,
+			},
+			expected: true,
+		}, {
+			config: LRGFromConfiguration{
+				Prefix: config.Prefix(defaultIPv6),
+				Table:  config.Table{ID: 254},
+			},
+			route: netlink.Route{
+				Dst:      &defaultIPv6,
+				Table:    254,
+				Priority: 100,
+			},
+			expected: true,
+		}, {
+			config: LRGFromConfiguration{
+				Prefix: config.Prefix(defaultIPv4),
+				Table:  config.Table{ID: 254},
+			},
+			route: netlink.Route{
+				Dst:      &defaultIPv4,
+				Table:    254,
+				Protocol: 5,
+			},
+			expected: true,
+		}, {
+			config: LRGFromConfiguration{
+				Prefix: config.Prefix(defaultIPv6),
+				Table:  config.Table{ID: 254},
+			},
+			route: netlink.Route{
+				Dst:      &defaultIPv6,
+				Table:    254,
+				Protocol: 5,
+			},
+			expected: true,
+		}, {
+			config: LRGFromConfiguration{
+				Prefix: config.Prefix(defaultIPv4),
+				Metric: &metric1000,
+				Table:  config.Table{ID: 254},
+			},
+			route: netlink.Route{
+				Dst:   &defaultIPv4,
+				Table: 254,
+			},
+			expected: false,
+		}, {
+			config: LRGFromConfiguration{
+				Prefix: config.Prefix(defaultIPv6),
+				Metric: &metric1000,
+				Table:  config.Table{ID: 254},
+			},
+			route: netlink.Route{
+				Dst:   &defaultIPv6,
+				Table: 254,
+			},
+			expected: false,
+		}, {
+			config: LRGFromConfiguration{
+				Prefix: config.Prefix(defaultIPv4),
+				Metric: &metric1000,
+				Table:  config.Table{ID: 254},
+			},
+			route: netlink.Route{
+				Dst:      &defaultIPv4,
+				Priority: 1000,
+				Table:    254,
+			},
+			expected: true,
+		}, {
+			config: LRGFromConfiguration{
+				Prefix: config.Prefix(defaultIPv6),
+				Metric: &metric1000,
+				Table:  config.Table{ID: 254},
+			},
+			route: netlink.Route{
+				Dst:      &defaultIPv6,
+				Priority: 1000,
+				Table:    254,
+			},
+			expected: true,
+		}, {
+			config: LRGFromConfiguration{
+				Prefix:   config.Prefix(defaultIPv4),
+				Protocol: &config.Protocol{ID: 5},
+				Table:    config.Table{ID: 254},
+			},
+			route: netlink.Route{
+				Dst:      &defaultIPv4,
+				Protocol: 5,
+				Table:    254,
+			},
+			expected: true,
+		}, {
+			config: LRGFromConfiguration{
+				Prefix:   config.Prefix(defaultIPv6),
+				Protocol: &config.Protocol{ID: 5},
+				Table:    config.Table{ID: 254},
+			},
+			route: netlink.Route{
+				Dst:      &defaultIPv6,
+				Protocol: 5,
+				Table:    254,
+			},
+			expected: true,
+		}, {
+			config: LRGFromConfiguration{
+				Prefix:   config.Prefix(defaultIPv4),
+				Protocol: &config.Protocol{ID: 5},
+				Table:    config.Table{ID: 254},
+			},
+			route: netlink.Route{
+				Dst:      &defaultIPv4,
+				Protocol: 6,
+				Table:    254,
+			},
+			expected: false,
+		}, {
+			config: LRGFromConfiguration{
+				Prefix:   config.Prefix(defaultIPv6),
+				Protocol: &config.Protocol{ID: 5},
+				Table:    config.Table{ID: 254},
+			},
+			route: netlink.Route{
+				Dst:      &defaultIPv6,
+				Protocol: 6,
+				Table:    254,
+			},
+			expected: false,
+		},
+	}
+	for _, tc := range cases {
+		got := tc.config.Match(&tc.route)
+		if tc.expected != got {
+			t.Errorf("LRGFromConfiguration.Match(%s,%s) == %s but expected %s",
+				tc.config, tc.route,
+				strconv.FormatBool(got), strconv.FormatBool(tc.expected))
+		}
+	}
+}
+
+func TestToMatch(t *testing.T) {
+	defaultIPv4 := net.IPNet(config.MustParsePrefix("0.0.0.0/0"))
+	defaultIPv6 := net.IPNet(config.MustParsePrefix("::/0"))
+	randomPrefix := net.IPNet(config.MustParsePrefix("10.16.0.0/16"))
+	cases := []struct {
+		config   LRGToConfiguration
+		route    netlink.Route
+		expected bool
+	}{
+		{
+			config: LRGToConfiguration{
+				Prefix:   config.Prefix(defaultIPv4),
+				Metric:   10,
+				Protocol: config.Protocol{ID: 17},
+				Table:    config.Table{ID: 254},
+			},
+			route: netlink.Route{
+				Dst:      &defaultIPv4,
+				Table:    254,
+				Priority: 10,
+				Protocol: 17,
+			},
+			expected: true,
+		}, {
+			config: LRGToConfiguration{
+				Prefix:   config.Prefix(defaultIPv4),
+				Metric:   10,
+				Protocol: config.Protocol{ID: 17},
+				Table:    config.Table{ID: 254},
+			},
+			route: netlink.Route{
+				Dst:      &randomPrefix,
+				Table:    254,
+				Priority: 10,
+				Protocol: 17,
+			},
+			expected: false,
+		}, {
+			config: LRGToConfiguration{
+				Prefix:   config.Prefix(defaultIPv6),
+				Metric:   10,
+				Protocol: config.Protocol{ID: 17},
+				Table:    config.Table{ID: 254},
+			},
+			route: netlink.Route{
+				Dst:      &defaultIPv6,
+				Table:    254,
+				Priority: 10,
+				Protocol: 17,
+			},
+			expected: true,
+		}, {
+			config: LRGToConfiguration{
+				Prefix:   config.Prefix(defaultIPv4),
+				Metric:   10,
+				Protocol: config.Protocol{ID: 17},
+				Table:    config.Table{ID: 254},
+			},
+			route: netlink.Route{
+				Dst:      &defaultIPv6,
+				Table:    254,
+				Priority: 10,
+				Protocol: 17,
+			},
+			expected: false,
+		}, {
+			config: LRGToConfiguration{
+				Prefix:   config.Prefix(defaultIPv6),
+				Metric:   10,
+				Protocol: config.Protocol{ID: 17},
+				Table:    config.Table{ID: 254},
+			},
+			route: netlink.Route{
+				Dst:      &defaultIPv4,
+				Table:    254,
+				Priority: 10,
+				Protocol: 17,
+			},
+			expected: false,
+		}, {
+			config: LRGToConfiguration{
+				Prefix:   config.Prefix(defaultIPv4),
+				Metric:   1000,
+				Protocol: config.Protocol{ID: 17},
+				Table:    config.Table{ID: 254},
+			},
+			route: netlink.Route{
+				Dst:      &defaultIPv4,
+				Table:    254,
+				Priority: 10,
+				Protocol: 17,
+			},
+			expected: false,
+		}, {
+			config: LRGToConfiguration{
+				Prefix:   config.Prefix(defaultIPv6),
+				Metric:   1000,
+				Protocol: config.Protocol{ID: 17},
+				Table:    config.Table{ID: 254},
+			},
+			route: netlink.Route{
+				Dst:      &defaultIPv6,
+				Table:    254,
+				Priority: 10,
+				Protocol: 17,
+			},
+			expected: false,
+		}, {
+			config: LRGToConfiguration{
+				Prefix:   config.Prefix(defaultIPv4),
+				Metric:   10,
+				Protocol: config.Protocol{ID: 5},
+				Table:    config.Table{ID: 254},
+			},
+			route: netlink.Route{
+				Dst:      &defaultIPv4,
+				Protocol: 6,
+				Priority: 10,
+				Table:    254,
+			},
+			expected: false,
+		}, {
+			config: LRGToConfiguration{
+				Prefix:   config.Prefix(defaultIPv6),
+				Metric:   10,
+				Protocol: config.Protocol{ID: 5},
+				Table:    config.Table{ID: 254},
+			},
+			route: netlink.Route{
+				Dst:      &defaultIPv6,
+				Priority: 10,
+				Protocol: 6,
+				Table:    254,
+			},
+			expected: false,
+		},
+	}
+	for _, tc := range cases {
+		got := tc.config.Match(&tc.route)
+		if tc.expected != got {
+			t.Errorf("LRGToConfiguration.Match(%s,%s) == %s but expected %s",
+				tc.config, tc.route,
+				strconv.FormatBool(got), strconv.FormatBool(tc.expected))
 		}
 	}
 }

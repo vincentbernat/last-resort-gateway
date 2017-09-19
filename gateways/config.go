@@ -4,8 +4,10 @@ import (
 	"net"
 
 	"github.com/pkg/errors"
+	"github.com/vishvananda/netlink"
 
 	"lrg/config"
+	"lrg/helpers"
 )
 
 // Configuration contains the configuration for the last resort
@@ -105,4 +107,22 @@ func (c *LRGConfiguration) UnmarshalYAML(unmarshal func(interface{}) error) erro
 	}
 	*c = LRGConfiguration(raw)
 	return nil
+}
+
+// Match will tell if a "from" configuration matches the given route.
+func (c *LRGFromConfiguration) Match(route *netlink.Route) bool {
+	return route.Dst != nil &&
+		helpers.IPNetEqual(net.IPNet(c.Prefix), *route.Dst) &&
+		(c.Protocol == nil || c.Protocol.ID == uint(route.Protocol)) &&
+		(c.Metric == nil || uint(*c.Metric) == uint(route.Priority)) &&
+		c.Table.ID == uint(route.Table)
+}
+
+// Match will tel if a "to" configuration matches the given route.
+func (c *LRGToConfiguration) Match(route *netlink.Route) bool {
+	return route.Dst != nil &&
+		helpers.IPNetEqual(net.IPNet(c.Prefix), *route.Dst) &&
+		c.Protocol.ID == uint(route.Protocol) &&
+		uint(c.Metric) == uint(route.Priority) &&
+		c.Table.ID == uint(route.Table)
 }
