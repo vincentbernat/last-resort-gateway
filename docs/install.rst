@@ -11,8 +11,8 @@ proper installation of *Go*. Building is then pretty simple::
 
 You'll either get a cryptic error or an executable in ``bin/last-resort-gateway``.
 
-Debian packages
----------------
+Debian packages (not done)
+--------------------------
 
 Alternatively, you can get some Debian packages by using the following command::
 

@@ -43,7 +43,7 @@ can be done when running as root or by setting the following sysctl:
 
 Then, you can run `make test` to run tests.
 
-## Packages
+## Packages (not done)
 
 To build Debian packages, either use:
 
